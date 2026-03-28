@@ -2,6 +2,7 @@ import logging
 import traceback
 
 from flask import Flask, jsonify
+from werkzeug.exceptions import HTTPException
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -30,6 +31,8 @@ except Exception as exc:
 # ---------------------------------------------------------------------------
 @app.errorhandler(Exception)
 def handle_unhandled_exception(exc):
+    if isinstance(exc, HTTPException):
+        raise  # Let Flask handle HTTP exceptions normally
     logger.error("Unhandled exception: %s", exc)
     logger.error(traceback.format_exc())
     return jsonify({"error": "Internal server error", "detail": str(exc)}), 500
