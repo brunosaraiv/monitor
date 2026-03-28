@@ -110,6 +110,6 @@ def health():
 # START SERVER
 # =========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🌐 Rodando na porta {port}")
+    port = int(os.environ.get("PORT", 8080))
+    print(f"Rodando na porta {port}")
     app.run(host="0.0.0.0", port=port)
