@@ -1,63 +1,89 @@
-import logging
-import traceback
+cat > app.py << 'EOF'
+#!/usr/bin/env python3
 
-from flask import Flask, jsonify
-from werkzeug.exceptions import HTTPException
+from flask import Flask, render_template_string, request, redirect
+import threading
+import json
+import os
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger(__name__)
+from main import run
 
-# ---------------------------------------------------------------------------
-# Application factory
-# ---------------------------------------------------------------------------
-try:
-    logger.info("Initializing Flask application...")
-    app = Flask(__name__)
-    logger.info("Flask application initialized successfully.")
-except Exception as exc:
-    logger.critical("Failed to initialize Flask application: %s", exc)
-    logger.critical(traceback.format_exc())
-    raise
+app = Flask(__name__)
 
+CONFIG_FILE = "config.json"
 
-# ---------------------------------------------------------------------------
-# Error handlers
-# ---------------------------------------------------------------------------
-@app.errorhandler(Exception)
-def handle_unhandled_exception(exc):
-    if isinstance(exc, HTTPException):
-        raise  # Let Flask handle HTTP exceptions normally
-    logger.error("Unhandled exception: %s", exc)
-    logger.error(traceback.format_exc())
-    return jsonify({"error": "Internal server error", "detail": str(exc)}), 500
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        return {"sections": {}}
+    with open(CONFIG_FILE, "r") as f:
+        return json.load(f)
 
+def save_config(data):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
+def start_monitor_safe():
+    try:
+        print("🚀 Monitor iniciado")
+        run()
+    except Exception as e:
+        print("❌ Erro no monitor:", e)
+
+threading.Thread(target=start_monitor_safe, daemon=True).start()
+
+HTML = """
+<h1>📊 Painel Monitor</h1>
+
+<h2>➕ Adicionar setor</h2>
+<form method="post" action="/add">
+  Nome do setor: <input name="name"><br><br>
+  Contatos (numero:apikey,...): <input name="contacts"><br><br>
+  <button type="submit">Adicionar</button>
+</form>
+
+<h2>📋 Setores monitorados</h2>
+<ul>
+{% for name, data in sections.items() %}
+<li>
+<b>{{name}}</b><br>
+📱 {{data.contacts}}<br>
+<a href="/delete/{{name}}">❌ Remover</a>
+</li><br>
+{% endfor %}
+</ul>
+"""
+
 @app.route("/")
-def home():
-    logger.info("GET / called")
-    print("GET / called", flush=True)
-    return "OK HOME"
+def index():
+    config = load_config()
+    return render_template_string(HTML, sections=config.get("sections", {}))
 
+@app.route("/add", methods=["POST"])
+def add():
+    name = request.form.get("name")
+    contacts = request.form.get("contacts")
+
+    config = load_config()
+    config.setdefault("sections", {})[name] = {
+        "contacts": contacts
+    }
+
+    save_config(config)
+    return redirect("/")
+
+@app.route("/delete/<name>")
+def delete(name):
+    config = load_config()
+    config.get("sections", {}).pop(name, None)
+    save_config(config)
+    return redirect("/")
 
 @app.route("/health")
 def health():
-    logger.info("GET /health called")
-    print("GET /health called", flush=True)
     return "OK HEALTH"
 
-
-# ---------------------------------------------------------------------------
-# Entrypoint (development only — production uses Gunicorn)
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    logger.info("Starting Flask development server on 0.0.0.0:8080")
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Rodando na porta {port}")
+    app.run(host="0.0.0.0", port=port)
+EOF
