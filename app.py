@@ -28,13 +28,17 @@ def save_config(data):
 
 
 # =========================
-# START MONITOR
+# MONITOR THREAD (SAFE)
 # =========================
-def start_monitor():
-    run_monitor()
+def start_monitor_safe():
+    try:
+        print("🚀 Iniciando monitor...")
+        run_monitor()
+    except Exception as e:
+        print("❌ Erro no monitor:", e)
 
 
-threading.Thread(target=start_monitor, daemon=True).start()
+threading.Thread(target=start_monitor_safe, daemon=True).start()
 
 
 # =========================
@@ -45,12 +49,12 @@ HTML = """
 
 <h2>➕ Adicionar setor</h2>
 <form method="post" action="/add">
-  Nome do setor: <input name="name"><br><br>
+  Nome: <input name="name"><br><br>
   Contatos (numero:apikey,...): <input name="contacts"><br><br>
   <button type="submit">Adicionar</button>
 </form>
 
-<h2>📋 Setores monitorados</h2>
+<h2>📋 Setores</h2>
 <ul>
 {% for name, data in sections.items() %}
 <li>
@@ -95,8 +99,17 @@ def delete(name):
 
 
 # =========================
-# START SERVER (RAILWAY)
+# HEALTH CHECK (RAILWAY)
+# =========================
+@app.route("/health")
+def health():
+    return "OK"
+
+
+# =========================
+# START SERVER
 # =========================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Rodando na porta {port}")
     app.run(host="0.0.0.0", port=port)

@@ -8,10 +8,7 @@ from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 from requests.exceptions import ProxyError
-
-load_dotenv()
 
 BASE_URL = os.getenv(
     "MONITOR_URL",
@@ -26,7 +23,7 @@ SESSION = requests.Session()
 
 
 # =========================
-# CONFIG DINÂMICA (PAINEL)
+# CONFIG (PAINEL)
 # =========================
 def load_config():
     if not os.path.exists("config.json"):
@@ -69,9 +66,9 @@ def send_whatsapp(contacts, message):
             if r.status_code == 200:
                 print(f"📩 Enviado para +{phone}")
             else:
-                print(f"❌ Erro {phone}")
+                print(f"❌ Erro {phone}: {r.status_code}")
         except Exception as e:
-            print(f"Erro envio: {e}")
+            print(f"❌ Erro envio {phone}: {e}")
 
         time.sleep(SEND_DELAY_SECONDS)
 
@@ -80,7 +77,8 @@ def send_whatsapp(contacts, message):
 # SCRAPING
 # =========================
 def fetch_tasks(url):
-    r = perform_get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = perform_get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -93,6 +91,8 @@ def fetch_tasks(url):
             continue
 
         href = link.get("href")
+        if not href:
+            continue
 
         tasks.append({
             "id": href.rsplit("/", 1)[-1],
@@ -127,15 +127,16 @@ def save_state(file, data):
 # MESSAGE
 # =========================
 def build_message(task):
-    return f"""
-🚨 NOVA TAREFA
+    now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-📌 {task['tarefa']}
-🏷️ {task['setor']}
-📅 {task['data']}
-
-🔗 {task['url']}
-"""
+    return (
+        "🚨 *NOVA TAREFA*\n\n"
+        f"📌 {task['tarefa']}\n"
+        f"🏷️ {task['setor']}\n"
+        f"📅 {task['data']}\n\n"
+        f"🔗 {task['url']}\n\n"
+        f"⏰ {now}"
+    )
 
 
 # =========================
@@ -143,8 +144,6 @@ def build_message(task):
 # =========================
 def run_monitor():
     print("🚀 Monitor iniciado")
-
-    states = {}
 
     while True:
         config = load_config()
@@ -161,6 +160,7 @@ def run_monitor():
                 known_ids = set(load_state(state_file))
 
                 if not known_ids:
+                    print(f"ℹ️ Inicializando estado {section}")
                     save_state(state_file, list(current_ids))
                     continue
 
@@ -176,6 +176,6 @@ def run_monitor():
                 save_state(state_file, list(current_ids))
 
             except Exception as e:
-                print(f"Erro {section}: {e}")
+                print(f"⚠️ Erro em {section}: {e}")
 
         time.sleep(CHECK_INTERVAL_SECONDS)
